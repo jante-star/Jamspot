@@ -1,0 +1,97 @@
+from firebase_admin import firestore as fs
+
+
+class Service:
+    COLLECTION = 'services'
+
+    @staticmethod
+    def get_by_id(service_id):
+        from app.firebase_config import db
+        if not db or not service_id:
+            return None
+        doc = db.collection(Service.COLLECTION).document(service_id).get()
+        if doc.exists:
+            data = doc.to_dict()
+            data['id'] = doc.id
+            return data
+        return None
+
+    @staticmethod
+    def create(host_id, data):
+        from app.firebase_config import db
+        if not db:
+            return None
+        doc_ref = db.collection(Service.COLLECTION).document()
+        doc_ref.set({
+            'hostId': host_id,
+            'title': data.get('title', ''),
+            'description': data.get('description', ''),
+            'price': float(data.get('price', 0)),
+            'priceUnit': data.get('priceUnit', 'session'),
+            'category': data.get('category', 'service'),
+            'location': data.get('location', {}),
+            'photos': data.get('photos', []),
+            'availability': data.get('availability', []),
+            'status': 'active',
+            'ratings': {'average': 0, 'count': 0},
+            'created_at': fs.SERVER_TIMESTAMP,
+            'updated_at': fs.SERVER_TIMESTAMP,
+        })
+        return doc_ref.id
+
+    @staticmethod
+    def get_all_published():
+        from app.firebase_config import db
+        if not db:
+            return []
+        results = []
+        for doc in db.collection(Service.COLLECTION).where('status', '==', 'active').stream():
+            data = doc.to_dict()
+            data['id'] = doc.id
+            results.append(data)
+        return results
+
+    @staticmethod
+    def search(filters=None):
+        from app.firebase_config import db
+        if not db:
+            return []
+        filters = filters or {}
+        results = []
+        for doc in db.collection(Service.COLLECTION).where('status', '==', 'active').stream():
+            data = doc.to_dict()
+            data['id'] = doc.id
+            q = (filters.get('q') or '').lower()
+            if q and q not in data.get('title', '').lower():
+                continue
+            results.append(data)
+        return results
+
+    @staticmethod
+    def get_by_host(host_id):
+        from app.firebase_config import db
+        if not db:
+            return []
+        results = []
+        for doc in db.collection(Service.COLLECTION).where('hostId', '==', host_id).stream():
+            data = doc.to_dict()
+            data['id'] = doc.id
+            results.append(data)
+        return results
+
+    @staticmethod
+    def update(service_id, data):
+        from app.firebase_config import db
+        if not db:
+            return False
+        data['updated_at'] = fs.SERVER_TIMESTAMP
+        db.collection(Service.COLLECTION).document(service_id).update(data)
+        return True
+
+    @staticmethod
+    def delete(service_id):
+        from app.firebase_config import db
+        if not db:
+            return False
+        db.collection(Service.COLLECTION).document(service_id).delete()
+        return True

@@ -1,0 +1,110 @@
+[
+  {
+    "type": "custom",
+    "name": "get_listing",
+    "description": "Fetch live details for a specific listing. Use when you have a listing_id, or pass name and city to do a fuzzy search. Call this when KB data may be stale or the caller asks about details not in your notes (e.g. cancellation policy, exact check-in time).",
+    "url": "{{PUBLIC_BASE_URL}}/api/retell/tools/get_listing",
+    "speak_during_execution": true,
+    "speak_after_execution": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "listing_id": {
+          "type": "string",
+          "description": "The LISTING_ID from the knowledge base entry. Preferred over name+city."
+        },
+        "name": {
+          "type": "string",
+          "description": "Partial or full title of the listing (fallback when listing_id is unknown)."
+        },
+        "city": {
+          "type": "string",
+          "description": "City where the listing is located (fallback when listing_id is unknown)."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "type": "custom",
+    "name": "check_availability",
+    "description": "Check whether a listing is available for the requested dates. You MUST call this before confirming any booking or promising that dates are open. Returns available (bool) and any conflicting date ranges.",
+    "url": "{{PUBLIC_BASE_URL}}/api/retell/tools/check_availability",
+    "speak_during_execution": true,
+    "speak_after_execution": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "listing_id": {
+          "type": "string",
+          "description": "The LISTING_ID of the listing to check."
+        },
+        "check_in": {
+          "type": "string",
+          "description": "Check-in date in YYYY-MM-DD format."
+        },
+        "check_out": {
+          "type": "string",
+          "description": "Check-out date in YYYY-MM-DD format."
+        }
+      },
+      "required": ["listing_id", "check_in", "check_out"]
+    }
+  },
+  {
+    "type": "custom",
+    "name": "create_booking",
+    "description": "Create a confirmed booking after the caller has verbally agreed to all details. Returns a booking_id — read the last 6 characters back to the caller as their confirmation code.",
+    "url": "{{PUBLIC_BASE_URL}}/api/retell/tools/create_booking",
+    "speak_during_execution": true,
+    "speak_after_execution": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "listing_id": {
+          "type": "string",
+          "description": "The LISTING_ID of the listing to book."
+        },
+        "check_in": {
+          "type": "string",
+          "description": "Check-in / start date in YYYY-MM-DD format."
+        },
+        "check_out": {
+          "type": "string",
+          "description": "Check-out / end date in YYYY-MM-DD format. For single-day events use the same date as check_in."
+        },
+        "guests": {
+          "type": "integer",
+          "description": "Number of guests or tickets."
+        },
+        "contact_name": {
+          "type": "string",
+          "description": "Full name of the caller / primary guest."
+        },
+        "contact_phone": {
+          "type": "string",
+          "description": "Callback phone number for the booking."
+        }
+      },
+      "required": ["listing_id", "check_in", "check_out", "guests", "contact_name", "contact_phone"]
+    }
+  },
+  {
+    "type": "custom",
+    "name": "transfer_to_host",
+    "description": "Retrieve the host's phone number so Retell can transfer the call. Use for special requests, complaints, refunds, payment disputes, or anything outside your decision authority.",
+    "url": "{{PUBLIC_BASE_URL}}/api/retell/tools/transfer_to_host",
+    "speak_during_execution": true,
+    "speak_after_execution": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "listing_id": {
+          "type": "string",
+          "description": "The LISTING_ID of the listing whose host should receive the transfer."
+        }
+      },
+      "required": ["listing_id"]
+    }
+  }
+]
