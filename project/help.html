@@ -132,6 +132,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Inject Jamspot API integration scripts
     const jsScripts = '<script src=\"/js/api.js\"><\/script><script src=\"/js/nav.js\"><\/script><script src=\"/js/integration.js\"><\/script>';
     template = template.replace(/<\/body>/i, jsScripts + '<\/body>');
+    // Rewrite old Claude-Design filenames to deployed paths directly in template
+    const routeMap = {
+      'Stays Homepage.html': '/', 'Stays Auth.html': '/auth.html',
+      'Stays Listing.html': '/listing.html', 'Stays Host.html': '/host.html',
+      'Stays Trips.html': '/trips.html', 'Stays Wishlists.html': '/wishlists.html',
+      'Stays Messages.html': '/messages.html', 'Stays Profile.html': '/profile.html',
+      'Stays Help.html': '/help.html', 'Stays Experiences.html': '/experiences.html',
+      'Stays Services.html': '/services.html', 'Stays Search.html': '/search.html',
+      'Stays Checkout.html': '/checkout.html', 'Stays Host Dashboard.html': '/host-dashboard.html',
+    };
+    for (const [old, neo] of Object.entries(routeMap)) {
+      template = template.split('href="' + old + '"').join('href="' + neo + '"');
+    }
 
 
     // Parse the template and swap the root element. Scripts inserted via

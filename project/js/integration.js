@@ -8,6 +8,28 @@
 
   const page = window.location.pathname.replace(/^\//, '') || 'index.html';
 
+  // ─── Fix bundle links (Claude Design exports use "Stays X.html" filenames) ─────────────
+  const ROUTE_MAP = {
+    'Stays Homepage.html': '/',
+    'Stays Auth.html': '/auth.html',
+    'Stays Listing.html': '/listing.html',
+    'Stays Host.html': '/host.html',
+    'Stays Trips.html': '/trips.html',
+    'Stays Wishlists.html': '/wishlists.html',
+    'Stays Messages.html': '/messages.html',
+    'Stays Profile.html': '/profile.html',
+    'Stays Help.html': '/help.html',
+    'Stays Experiences.html': '/experiences.html',
+    'Stays Services.html': '/services.html',
+    'Stays Search.html': '/search.html',
+    'Stays Checkout.html': '/checkout.html',
+    'Stays Host Dashboard.html': '/host-dashboard.html',
+  };
+  document.querySelectorAll('a[href]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (ROUTE_MAP[href] !== undefined) a.setAttribute('href', ROUTE_MAP[href]);
+  });
+
   // ─── Helpers ───────────────────────────────────────────────────────────────────────────
 
   function formatPrice(n) { return '$' + Number(n || 0).toFixed(0); }
