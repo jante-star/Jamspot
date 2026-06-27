@@ -4,6 +4,14 @@ from app.services.auth_service import login_required
 services_bp = Blueprint('services', __name__, url_prefix='/api/services')
 
 
+@services_bp.route('/host/mine', methods=['GET'])
+@login_required
+def my_services():
+    from app.models.service import Service
+    svcs = Service.get_by_host(session['user_id'])
+    return jsonify({'services': svcs}), 200
+
+
 @services_bp.route('', methods=['GET'])
 def get_services():
     from app.models.service import Service
@@ -59,11 +67,3 @@ def delete_service(service_id):
         return jsonify({'error': 'Forbidden'}), 403
     Service.delete(service_id)
     return jsonify({'ok': True}), 200
-
-
-@services_bp.route('/host/mine', methods=['GET'])
-@login_required
-def my_services():
-    from app.models.service import Service
-    svcs = Service.get_by_host(session['user_id'])
-    return jsonify({'services': svcs}), 200

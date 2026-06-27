@@ -4,6 +4,14 @@ from app.services.auth_service import login_required
 experiences_bp = Blueprint('experiences', __name__, url_prefix='/api/experiences')
 
 
+@experiences_bp.route('/host/mine', methods=['GET'])
+@login_required
+def my_experiences():
+    from app.models.experience import Experience
+    experiences = Experience.get_by_host(session['user_id'])
+    return jsonify({'experiences': experiences}), 200
+
+
 @experiences_bp.route('', methods=['GET'])
 def get_experiences():
     from app.models.experience import Experience
@@ -59,11 +67,3 @@ def delete_experience(exp_id):
         return jsonify({'error': 'Forbidden'}), 403
     Experience.delete(exp_id)
     return jsonify({'ok': True}), 200
-
-
-@experiences_bp.route('/host/mine', methods=['GET'])
-@login_required
-def my_experiences():
-    from app.models.experience import Experience
-    experiences = Experience.get_by_host(session['user_id'])
-    return jsonify({'experiences': experiences}), 200

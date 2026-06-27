@@ -13,7 +13,11 @@ def create_app(config=None):
     if config:
         app.config.from_object(config)
 
-    CORS(app, resources={r'/api/*': {'origins': '*'}}, supports_credentials=True)
+    allowed_origins = os.getenv(
+        'ALLOWED_ORIGINS',
+        'https://jamspot.fly.dev,http://localhost:5000,http://127.0.0.1:5000'
+    ).split(',')
+    CORS(app, resources={r'/api/*': {'origins': allowed_origins}}, supports_credentials=True)
 
     from app.routes.auth import auth_bp
     from app.routes.listings import listings_bp

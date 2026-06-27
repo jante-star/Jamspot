@@ -4,6 +4,32 @@ from app.services.auth_service import login_required
 listings_bp = Blueprint('listings', __name__, url_prefix='/api/listings')
 
 
+@listings_bp.route('/host/mine', methods=['GET'])
+@login_required
+def my_listings():
+    from app.models.listing import Listing
+    listings = Listing.get_by_host(session['user_id'])
+    return jsonify({'listings': listings}), 200
+
+
+@listings_bp.route('/places/search', methods=['GET'])
+def places_search():
+    from app.services.places_service import PlacesService
+    q = request.args.get('q', 'hotels')
+    location = request.args.get('location', '')
+    results = PlacesService.search_accommodations(q, location)
+    return jsonify({'results': results}), 200
+
+
+@listings_bp.route('/places/<place_id>', methods=['GET'])
+def place_details(place_id):
+    from app.services.places_service import PlacesService
+    details = PlacesService.get_place_details(place_id)
+    if not details:
+        return jsonify({'error': 'Place not found'}), 404
+    return jsonify(details), 200
+
+
 @listings_bp.route('', methods=['GET'])
 def get_listings():
     from app.models.listing import Listing
@@ -65,29 +91,3 @@ def delete_listing(listing_id):
         return jsonify({'error': 'Forbidden'}), 403
     Listing.delete(listing_id)
     return jsonify({'ok': True}), 200
-
-
-@listings_bp.route('/host/mine', methods=['GET'])
-@login_required
-def my_listings():
-    from app.models.listing import Listing
-    listings = Listing.get_by_host(session['user_id'])
-    return jsonify({'listings': listings}), 200
-
-
-@listings_bp.route('/places/search', methods=['GET'])
-def places_search():
-    from app.services.places_service import PlacesService
-    q = request.args.get('q', 'hotels')
-    location = request.args.get('location', '')
-    results = PlacesService.search_accommodations(q, location)
-    return jsonify({'results': results}), 200
-
-
-@listings_bp.route('/places/<place_id>', methods=['GET'])
-def place_details(place_id):
-    from app.services.places_service import PlacesService
-    details = PlacesService.get_place_details(place_id)
-    if not details:
-        return jsonify({'error': 'Place not found'}), 404
-    return jsonify(details), 200
