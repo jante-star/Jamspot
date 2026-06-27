@@ -1,0 +1,14 @@
+node_modules/
+.DS_Store
+*.local
+.image-slots.state.json
+firebase-key.json
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+.env.local
+*.egg-info/
+dist/
+.pytest_cache/

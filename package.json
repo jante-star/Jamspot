@@ -1,0 +1,8 @@
+{
+  "name": "jamspot",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "npx serve project -l 3000"
+  }
+}
