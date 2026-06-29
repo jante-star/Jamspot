@@ -23,9 +23,11 @@ def search():
         from app.models.service import Service
         results['services'] = Service.search(filters)
 
-    if content_type == 'all':
-        total = sum(len(v) for v in results.values())
-    else:
-        total = sum(len(v) for v in results.values())
+    total = len(results.get('listings', [])) + len(results.get('experiences', [])) + len(results.get('services', []))
 
-    return jsonify({'results': results, 'query': q, 'type': content_type, 'total': total}), 200
+    return jsonify({
+        'listings': results.get('listings', []),
+        'experiences': results.get('experiences', []),
+        'services': results.get('services', []),
+        'query': q, 'type': content_type, 'total': total
+    }), 200

@@ -20,13 +20,15 @@ def get_profile():
 def update_profile():
     from app.models.user import User
     data = request.get_json() or {}
-    allowed = {'name', 'phone', 'bio', 'profile_image'}
+    allowed = {'name', 'phone', 'bio', 'profile_image', 'role'}
     update_data = {k: v for k, v in data.items() if k in allowed}
     if not update_data:
         return jsonify({'error': 'No valid fields to update'}), 400
     User.update(session['user_id'], update_data)
     if 'name' in update_data:
         session['name'] = update_data['name']
+    if 'role' in update_data:
+        session['role'] = update_data['role']
     return jsonify({'ok': True}), 200
 
 

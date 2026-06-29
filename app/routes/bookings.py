@@ -27,7 +27,10 @@ def create_booking():
     listing_id = data.get('listing_id', '').strip()
     check_in = data.get('check_in', '')
     check_out = data.get('check_out', '')
-    guests = int(data.get('guests', 1))
+    try:
+        guests = max(1, int(data.get('guests', 1)))
+    except (TypeError, ValueError):
+        guests = 1
 
     if not listing_id or not check_in or not check_out:
         return jsonify({'error': 'listing_id, check_in, and check_out are required'}), 400
@@ -41,9 +44,11 @@ def create_booking():
         from datetime import date
         d1 = date.fromisoformat(check_in)
         d2 = date.fromisoformat(check_out)
-        nights = max((d2 - d1).days, 1)
+        if d2 <= d1:
+            return jsonify({'error': 'check_out must be after check_in'}), 400
+        nights = (d2 - d1).days
     except ValueError:
-        nights = 1
+        return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
 
     total = price * (nights if listing_type in ('listing', 'experience') else guests)
 

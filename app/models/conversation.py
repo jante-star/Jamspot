@@ -72,7 +72,6 @@ class Conversation:
         msg_ref = conv_ref.collection('messages').document()
         msg_ref.set({'senderId': sender_id, 'body': body, 'createdAt': now, 'read': False})
 
-        unread_updates = {f'unreadCount.{uid}': db.field_path_delete() for uid in []}
         update = {'lastMessage': body, 'lastMessageAt': now}
         for uid in other_participants:
             update[f'unreadCount.{uid}'] = 1

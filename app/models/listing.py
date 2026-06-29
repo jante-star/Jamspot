@@ -48,14 +48,30 @@ class Listing:
             return []
         filters = filters or {}
         query = db.collection(Listing.COLLECTION).where('status', '==', 'active')
+        q = (filters.get('q') or '').lower()
+        category = (filters.get('category') or '').lower()
+        city_f = (filters.get('city') or '').lower()
+        try:
+            min_price = float(filters.get('min_price') or 0)
+            max_price = float(filters.get('max_price') or 0)
+        except (TypeError, ValueError):
+            min_price = max_price = 0
         results = []
         for doc in query.stream():
             data = doc.to_dict()
             data['id'] = doc.id
             loc = data.get('location', {})
             city = loc.get('city', '').lower()
-            q = (filters.get('q') or '').lower()
             if q and q not in data.get('title', '').lower() and q not in city:
+                continue
+            if category and data.get('category', '').lower() != category:
+                continue
+            if city_f and city_f not in city:
+                continue
+            price = float(data.get('price', 0))
+            if min_price and price < min_price:
+                continue
+            if max_price and price > max_price:
                 continue
             results.append(data)
         return results
