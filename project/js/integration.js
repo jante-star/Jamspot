@@ -158,6 +158,14 @@
           </div>`).join('');
       }
 
+      // Map embed
+      const loc = listing.location || {};
+      const mapContainer = document.querySelector('[data-map], .listing-map, #listing-map');
+      if (mapContainer && (loc.lat || loc.address || listing.title)) {
+        const q = encodeURIComponent(loc.address || `${listing.title} ${loc.city || ''}`);
+        mapContainer.innerHTML = `<iframe title="Location map" width="100%" height="300" style="border:0;border-radius:12px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${q}&output=embed"></iframe>`;
+      }
+
       // Wishlist heart
       document.querySelectorAll('[data-action="wishlist"]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -414,6 +422,167 @@
             </div>
             <a href="/listing.html?id=${esc(l.id)}" style="font-size:13px;color:#FFB400;">View →</a>
           </div>`).join('') : '<p style="color:#717171;padding:16px;">No listings yet.</p>';
+      }
+
+      // Add listing button + create-listing modal
+      const addBtn = document.querySelector('[data-action="add-listing"], .add-listing-btn');
+      if (addBtn || listingsEl) {
+        const modalId = 'js-create-listing-modal';
+        if (!document.getElementById(modalId)) {
+          const modal = document.createElement('div');
+          modal.id = modalId;
+          modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;';
+          modal.innerHTML = `
+            <div style="background:#fff;border-radius:16px;padding:32px;width:min(520px,95vw);max-height:90vh;overflow-y:auto;position:relative;">
+              <button id="js-close-modal" style="position:absolute;top:16px;right:16px;border:none;background:none;font-size:22px;cursor:pointer;">✕</button>
+              <h2 style="margin:0 0 24px;font-size:20px;font-weight:700;">Add a new listing</h2>
+              <form id="js-create-listing-form" style="display:flex;flex-direction:column;gap:14px;">
+                <div>
+                  <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Title</label>
+                  <input name="title" required placeholder="Cozy studio in Brooklyn" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Address</label>
+                  <input name="address" id="js-address-input" required autocomplete="off" placeholder="Start typing an address…" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                  <div id="js-places-dropdown" style="display:none;border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px;background:#fff;max-height:180px;overflow-y:auto;"></div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                  <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Price / night ($)</label>
+                    <input name="price" type="number" min="1" required placeholder="150" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                  </div>
+                  <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Category</label>
+                    <select name="category" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                      <option value="home">Home</option><option value="studio">Studio</option>
+                      <option value="beachfront">Beachfront</option><option value="cabin">Cabin</option>
+                      <option value="apartment">Apartment</option><option value="villa">Villa</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Description</label>
+                  <textarea name="description" rows="3" placeholder="Tell guests about your space…" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;resize:vertical;box-sizing:border-box;"></textarea>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+                  <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Bedrooms</label>
+                    <input name="bedrooms" type="number" min="0" value="1" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                  </div>
+                  <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Bathrooms</label>
+                    <input name="bathrooms" type="number" min="0" step="0.5" value="1" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                  </div>
+                  <div>
+                    <label style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Max guests</label>
+                    <input name="maxGuests" type="number" min="1" value="2" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:15px;box-sizing:border-box;">
+                  </div>
+                </div>
+                <button type="submit" style="margin-top:8px;padding:14px;background:#222;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;">Create listing</button>
+              </form>
+            </div>`;
+          document.body.appendChild(modal);
+
+          // Hidden location fields populated by Places autocomplete
+          let selectedLocation = {};
+
+          // Close modal
+          document.getElementById('js-close-modal').addEventListener('click', () => { modal.style.display = 'none'; });
+          modal.addEventListener('click', e => { if (e.target === modal) modal.style.display = 'none'; });
+
+          // Address autocomplete via backend Places proxy
+          const addressInput = document.getElementById('js-address-input');
+          const dropdown = document.getElementById('js-places-dropdown');
+          let debounceTimer;
+          addressInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            const q = addressInput.value.trim();
+            if (q.length < 3) { dropdown.style.display = 'none'; return; }
+            debounceTimer = setTimeout(async () => {
+              try {
+                const res = await JamSpot.apiFetch(`/api/listings/places/search?q=${encodeURIComponent(q)}`);
+                const results = res.results || [];
+                if (!results.length) { dropdown.style.display = 'none'; return; }
+                dropdown.innerHTML = results.map((r, i) => `
+                  <div data-idx="${i}" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0f0f0;" class="places-opt">
+                    ${esc(r.name)}${r.address ? ' — <span style="color:#717171">' + esc(r.address) + '</span>' : ''}
+                  </div>`).join('');
+                dropdown.style.display = 'block';
+                dropdown._results = results;
+              } catch { dropdown.style.display = 'none'; }
+            }, 350);
+          });
+
+          dropdown.addEventListener('click', async e => {
+            const opt = e.target.closest('.places-opt');
+            if (!opt) return;
+            const r = dropdown._results[parseInt(opt.dataset.idx)];
+            addressInput.value = r.address || r.name;
+            dropdown.style.display = 'none';
+            // Fetch full details for lat/lng/city
+            try {
+              const detail = await JamSpot.apiFetch(`/api/listings/places/${encodeURIComponent(r.placeId || r.place_id || r.id || '')}`);
+              selectedLocation = {
+                address: detail.address || r.address || r.name,
+                city: detail.city || '',
+                lat: detail.lat || null,
+                lng: detail.lng || null,
+              };
+            } catch { selectedLocation = { address: r.address || r.name, city: '' }; }
+          });
+
+          // Form submit
+          document.getElementById('js-create-listing-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const body = {
+              title: fd.get('title'),
+              description: fd.get('description'),
+              price: parseFloat(fd.get('price')),
+              category: fd.get('category'),
+              bedrooms: parseInt(fd.get('bedrooms')),
+              bathrooms: parseFloat(fd.get('bathrooms')),
+              maxGuests: parseInt(fd.get('maxGuests')),
+              location: Object.keys(selectedLocation).length ? selectedLocation : { address: fd.get('address') },
+              amenities: [],
+            };
+            try {
+              const submitBtn = e.target.querySelector('[type="submit"]');
+              submitBtn.textContent = 'Creating…';
+              submitBtn.disabled = true;
+              await JamSpot.apiFetch('/api/listings', { method: 'POST', body });
+              showToast('Listing created!');
+              modal.style.display = 'none';
+              // Refresh listings
+              const refreshed = await JamSpot.apiFetch('/api/listings/host/mine');
+              const newListings = refreshed.listings || [];
+              if (listingsEl) listingsEl.innerHTML = newListings.length ? newListings.map(l => `
+                <div style="padding:16px;border:1px solid #eee;border-radius:12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+                  <div>
+                    <div style="font-weight:600;">${esc(l.title)}</div>
+                    <div style="color:#717171;font-size:13px;">${formatPrice(l.price)}/night · ${esc((l.location || {}).city || '')}</div>
+                  </div>
+                  <a href="/listing.html?id=${esc(l.id)}" style="font-size:13px;color:#FFB400;">View →</a>
+                </div>`).join('') : '<p style="color:#717171;padding:16px;">No listings yet.</p>';
+            } catch (err) {
+              showToast(err.message || 'Failed to create listing', false);
+              const sb = e.target.querySelector('[type="submit"]');
+              sb.textContent = 'Create listing'; sb.disabled = false;
+            }
+          });
+        }
+
+        // Wire add-listing button — also inject one if none found
+        const openModal = () => { document.getElementById(modalId).style.display = 'flex'; };
+        if (addBtn) {
+          addBtn.addEventListener('click', e => { e.preventDefault(); openModal(); });
+        } else if (listingsEl) {
+          const fab = document.createElement('button');
+          fab.textContent = '+ Add listing';
+          fab.style.cssText = 'margin-bottom:16px;padding:10px 20px;background:#222;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;';
+          fab.addEventListener('click', openModal);
+          listingsEl.parentElement?.insertBefore(fab, listingsEl);
+        }
       }
     } catch (e) { console.error('Host dashboard error', e); }
   }
