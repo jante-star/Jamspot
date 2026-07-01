@@ -71,6 +71,54 @@ def login():
     }), 200
 
 
+@auth_bp.route('/google', methods=['POST'])
+def google_signin():
+    data = _get_body()
+    id_token = data.get('idToken', '')
+    if not id_token:
+        return jsonify({'error': 'idToken is required.'}), 400
+
+    from app.services.auth_service import AuthService
+    decoded = AuthService.verify_token(id_token)
+    if isinstance(decoded, dict) and 'error' in decoded:
+        return jsonify({'error': 'Invalid Google sign-in token.'}), 401
+
+    uid = decoded.get('uid')
+    email = decoded.get('email', '')
+    name = decoded.get('name', '')
+
+    from app.firebase_config import db
+    from firebase_admin import firestore as fs
+    role = 'guest'
+    if db:
+        doc_ref = db.collection('users').document(uid)
+        doc = doc_ref.get()
+        if doc.exists:
+            existing = doc.to_dict()
+            role = existing.get('role', 'guest')
+            name = existing.get('name') or name
+        else:
+            doc_ref.set({
+                'uid': uid,
+                'email': email,
+                'role': role,
+                'name': name,
+                'phone': '',
+                'bio': '',
+                'profile_image': '',
+                'created_at': fs.SERVER_TIMESTAMP,
+                'updated_at': fs.SERVER_TIMESTAMP,
+            })
+
+    session['user_id'] = uid
+    session['email'] = email
+    session['role'] = role
+    session['name'] = name
+    session.permanent = True
+
+    return jsonify({'uid': uid, 'email': email, 'name': name, 'role': role}), 200
+
+
 @auth_bp.route('/logout', methods=['POST', 'GET'])
 def logout():
     from app.services.auth_service import AuthService

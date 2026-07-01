@@ -54,6 +54,47 @@
       </a>`;
   }
 
+  // Wires a debounced Places-autocomplete dropdown onto a text input.
+  // onSelect receives { address, city, lat, lng } once the user picks a result.
+  function wireAddressAutocomplete(input, dropdown, onSelect) {
+    let debounceTimer;
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = input.value.trim();
+      if (q.length < 3) { dropdown.style.display = 'none'; return; }
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await JamSpot.apiFetch(`/api/listings/places/search?q=${encodeURIComponent(q)}`);
+          const results = res.results || [];
+          if (!results.length) { dropdown.style.display = 'none'; return; }
+          dropdown.innerHTML = results.map((r, i) => `
+            <div data-idx="${i}" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0f0f0;" class="places-opt">
+              ${esc(r.name)}${r.address ? ' — <span style="color:#717171">' + esc(r.address) + '</span>' : ''}
+            </div>`).join('');
+          dropdown.style.display = 'block';
+          dropdown._results = results;
+        } catch { dropdown.style.display = 'none'; }
+      }, 350);
+    });
+
+    dropdown.addEventListener('click', async e => {
+      const opt = e.target.closest('.places-opt');
+      if (!opt) return;
+      const r = dropdown._results[parseInt(opt.dataset.idx)];
+      input.value = r.address || r.name;
+      dropdown.style.display = 'none';
+      try {
+        const detail = await JamSpot.apiFetch(`/api/listings/places/${encodeURIComponent(r.placeId || r.place_id || r.id || '')}`);
+        onSelect({
+          address: detail.address || r.address || r.name,
+          city: detail.city || '',
+          lat: detail.lat || null,
+          lng: detail.lng || null,
+        });
+      } catch { onSelect({ address: r.address || r.name, city: '' }); }
+    });
+  }
+
   function showToast(msg, ok = true) {
     const t = document.createElement('div');
     t.textContent = msg;
@@ -75,15 +116,50 @@
       } catch (e) { console.warn('Homepage listings error', e); }
     }
 
-    // Wire search form submission
-    const searchForm = document.querySelector('form.search, .searchcard form, form[role="search"]');
-    if (searchForm) {
-      searchForm.addEventListener('submit', e => {
+    // Wire search bar (Claude Design bundle has no <form> — it's a .searchcard
+    // with .search-fields buttons, plus a .searchpill shown once scrolled)
+    function wireSearchWhereField(container, selector) {
+      const whereBtn = container ? container.querySelector(selector) : null;
+      if (!whereBtn) return null;
+      let currentValue = '';
+      whereBtn.addEventListener('click', e => {
         e.preventDefault();
-        const q = (searchForm.querySelector('input[type="text"], input[type="search"]') || {}).value || '';
-        window.location.href = `/search.html?q=${encodeURIComponent(q)}`;
+        if (whereBtn.querySelector('input')) return; // already editing
+        const label = whereBtn.querySelector('.fk, .k');
+        const valueEl = whereBtn.querySelector('.fv') || whereBtn;
+        const placeholder = valueEl.textContent.trim();
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = placeholder;
+        input.value = currentValue;
+        input.style.cssText = 'width:100%;border:none;outline:none;background:none;font:inherit;color:inherit;';
+        valueEl.textContent = '';
+        valueEl.appendChild(input);
+        input.focus();
+        input.addEventListener('input', () => { currentValue = input.value; });
+        input.addEventListener('click', ev => ev.stopPropagation());
+        input.addEventListener('keydown', ev => {
+          if (ev.key === 'Enter') { ev.preventDefault(); doSearch(); }
+        });
       });
+      return () => currentValue || (whereBtn.querySelector('input') || {}).value || '';
     }
+
+    function doSearch() {
+      const q = getSearchQuery ? getSearchQuery() : '';
+      window.location.href = `/search.html?q=${encodeURIComponent(q || '')}`;
+    }
+
+    const searchcard = document.querySelector('.searchcard');
+    const searchpill = document.querySelector('.searchpill');
+    const getCardQuery = wireSearchWhereField(searchcard, '.search-fields .field');
+    const getPillQuery = wireSearchWhereField(searchpill, '.seg');
+    let getSearchQuery = () => (getCardQuery && getCardQuery()) || (getPillQuery && getPillQuery()) || '';
+
+    const submitBtn = document.querySelector('.search-fields .submit');
+    if (submitBtn) submitBtn.addEventListener('click', e => { e.preventDefault(); doSearch(); });
+    const pillGoBtn = document.querySelector('.searchpill .go');
+    if (pillGoBtn) pillGoBtn.addEventListener('click', e => { e.preventDefault(); doSearch(); });
 
     // Category bar
     document.querySelectorAll('.catbar button, [data-category]').forEach(btn => {
@@ -231,29 +307,73 @@
     const s = await JamSpot.getSession();
     if (s.authenticated) { window.location.href = '/'; return; }
 
+    // The bundle's own inline script already attached a click listener to
+    // #authCta that just does location.href="Stays Homepage.html" (rewritten
+    // to "/") without calling our API. Same-element listeners fire in
+    // registration order regardless of capture/bubble, so we can't out-race
+    // it with addEventListener — clone the node to drop its listeners instead.
+    const oldCta = document.getElementById('authCta');
+    const cta = oldCta ? oldCta.cloneNode(true) : null;
+    if (oldCta) oldCta.parentNode.replaceChild(cta, oldCta);
+
+    const nameField = document.getElementById('nameField');
+    const segLogin = document.getElementById('segLogin');
+    const segSignup = document.getElementById('segSignup');
+
+    // The bundle's own toggle script still updates nameField/welcome text
+    // correctly (those nodes weren't cloned), but its closure over the old
+    // #authCta node means it can no longer update our new button's label.
+    if (cta && segLogin && segSignup) {
+      segLogin.addEventListener('click', () => { cta.textContent = 'Continue'; });
+      segSignup.addEventListener('click', () => { cta.textContent = 'Agree and continue'; });
+    }
+
     async function handleAuth(e) {
       e.preventDefault();
-      const form = e.target.closest('form') || e.target;
-      const email = (form.querySelector('[name="email"], input[type="email"]') || {}).value || '';
-      const password = (form.querySelector('[name="password"], input[type="password"]') || {}).value || '';
-      const name = (form.querySelector('[name="name"], [name="full_name"]') || {}).value || '';
-      const isLogin = !name;
+      const isSignup = (segSignup && segSignup.classList.contains('on')) ||
+        (nameField && getComputedStyle(nameField).display !== 'none');
+
+      const nameInput = nameField ? nameField.querySelector('input') : null;
+      const emailInput = document.querySelector('.auth-fields .af:not(#nameField) input[type="text"]');
+      const passwordInput = document.querySelector('.auth-fields .af input[type="password"]');
+
+      const name = (nameInput || {}).value || '';
+      const email = (emailInput || {}).value || '';
+      const password = (passwordInput || {}).value || '';
+
       try {
-        if (isLogin) {
-          await JamSpot.apiFetch('/api/auth/login', { method: 'POST', body: { email, password } });
-        } else {
+        if (isSignup) {
           await JamSpot.apiFetch('/api/auth/register', { method: 'POST', body: { email, password, name } });
+        } else {
+          await JamSpot.apiFetch('/api/auth/login', { method: 'POST', body: { email, password } });
         }
         window.location.href = '/';
       } catch (err) { showToast(err.message || 'Auth failed', false); }
     }
 
-    document.querySelectorAll('form, [data-action="login"], [data-action="signup"]').forEach(el => {
-      el.addEventListener('submit', handleAuth);
+    if (cta) cta.addEventListener('click', handleAuth);
+
+    // Hide Apple/Facebook — no OAuth configured for them yet
+    document.querySelectorAll('.social .sbtn').forEach(btn => {
+      const label = (btn.querySelector('.lbl') || {}).textContent || '';
+      if (/Apple|Facebook/i.test(label)) btn.style.display = 'none';
     });
-    document.querySelectorAll('button[type="submit"], .auth-btn').forEach(btn => {
-      btn.addEventListener('click', handleAuth);
-    });
+
+    // Google Sign-In via Firebase
+    const googleBtn = Array.from(document.querySelectorAll('.social .sbtn')).find(btn =>
+      /Google/i.test((btn.querySelector('.lbl') || {}).textContent || ''));
+    if (googleBtn && window.firebase) {
+      googleBtn.addEventListener('click', async e => {
+        e.preventDefault();
+        try {
+          const provider = new firebase.auth.GoogleAuthProvider();
+          const result = await firebase.auth().signInWithPopup(provider);
+          const idToken = await result.user.getIdToken();
+          await JamSpot.apiFetch('/api/auth/google', { method: 'POST', body: { idToken } });
+          window.location.href = '/';
+        } catch (err) { showToast(err.message || 'Google sign-in failed', false); }
+      });
+    }
   }
 
   // ─── Trips ────────────────────────────────────────────────────────────────────────────
@@ -493,43 +613,7 @@
           // Address autocomplete via backend Places proxy
           const addressInput = document.getElementById('js-address-input');
           const dropdown = document.getElementById('js-places-dropdown');
-          let debounceTimer;
-          addressInput.addEventListener('input', () => {
-            clearTimeout(debounceTimer);
-            const q = addressInput.value.trim();
-            if (q.length < 3) { dropdown.style.display = 'none'; return; }
-            debounceTimer = setTimeout(async () => {
-              try {
-                const res = await JamSpot.apiFetch(`/api/listings/places/search?q=${encodeURIComponent(q)}`);
-                const results = res.results || [];
-                if (!results.length) { dropdown.style.display = 'none'; return; }
-                dropdown.innerHTML = results.map((r, i) => `
-                  <div data-idx="${i}" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid #f0f0f0;" class="places-opt">
-                    ${esc(r.name)}${r.address ? ' — <span style="color:#717171">' + esc(r.address) + '</span>' : ''}
-                  </div>`).join('');
-                dropdown.style.display = 'block';
-                dropdown._results = results;
-              } catch { dropdown.style.display = 'none'; }
-            }, 350);
-          });
-
-          dropdown.addEventListener('click', async e => {
-            const opt = e.target.closest('.places-opt');
-            if (!opt) return;
-            const r = dropdown._results[parseInt(opt.dataset.idx)];
-            addressInput.value = r.address || r.name;
-            dropdown.style.display = 'none';
-            // Fetch full details for lat/lng/city
-            try {
-              const detail = await JamSpot.apiFetch(`/api/listings/places/${encodeURIComponent(r.placeId || r.place_id || r.id || '')}`);
-              selectedLocation = {
-                address: detail.address || r.address || r.name,
-                city: detail.city || '',
-                lat: detail.lat || null,
-                lng: detail.lng || null,
-              };
-            } catch { selectedLocation = { address: r.address || r.name, city: '' }; }
-          });
+          wireAddressAutocomplete(addressInput, dropdown, loc => { selectedLocation = loc; });
 
           // Form submit
           document.getElementById('js-create-listing-form').addEventListener('submit', async e => {
@@ -589,17 +673,127 @@
 
   // ─── Host onboarding ───────────────────────────────────────────────────────────────────────
   if (page === 'host.html') {
-    document.querySelectorAll('[data-action="become-host"], .host-cta button, .cta-btn').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const session = await JamSpot.getSession();
-        if (!session.authenticated) { window.location.href = '/auth.html'; return; }
-        try {
-          await JamSpot.apiFetch('/api/profile', { method: 'PUT', body: { role: 'host' } });
-          window.location.href = '/host-dashboard.html';
-        } catch (err) { showToast(err.message || 'Error', false); }
+    // The bundle's own wizard script (loaded from a separate compressed asset)
+    // drives step transitions (#flowNext/#flowBack), the .typeopt "on" class
+    // toggle, and counters — but it never auto-advances on card click, every
+    // field is a static fake-copy <div>, and the final step hard-navigates to
+    // a stale "Stays Host Dashboard.html" path without ever calling our API.
+    // Everything below layers functionality on top without touching that asset.
+
+    // Auto-advance step 1: after the bundle's own listener toggles .on,
+    // move to step 2 so the user doesn't need a separate "Next" click.
+    document.querySelectorAll('.typegrid .typeopt').forEach(opt => {
+      opt.addEventListener('click', () => {
+        setTimeout(() => { const btn = document.getElementById('flowNext'); if (btn) btn.click(); }, 150);
       });
     });
+
+    // Replace every fake-copy .bigfield with a real editable input/textarea.
+    const fieldRefs = {}; // label text -> input/textarea element
+    document.querySelectorAll('.bigfield').forEach(field => {
+      const kEl = field.querySelector('.k');
+      const label = kEl ? kEl.textContent.trim() : '';
+      const isMultiline = field.style.minHeight === '120px' || /Description/i.test(label);
+      const el = document.createElement(isMultiline ? 'textarea' : 'input');
+      if (!isMultiline) el.type = 'text';
+      el.placeholder = `Enter ${label.toLowerCase()}…`;
+      el.style.cssText = 'width:100%;border:none;outline:none;background:none;font:inherit;color:inherit;padding:0;' + (isMultiline ? 'resize:vertical;min-height:80px;' : '');
+      // Clear the fake trailing text node but keep the .k label
+      Array.from(field.childNodes).forEach(n => { if (n !== kEl) field.removeChild(n); });
+      field.appendChild(el);
+      if (label) fieldRefs[label] = el;
+    });
+
+    // Wire Places autocomplete on the Address field specifically
+    if (fieldRefs['Address']) {
+      const addressInput = fieldRefs['Address'];
+      const dropdown = document.createElement('div');
+      dropdown.style.cssText = 'display:none;border:1px solid #ddd;border-radius:0 0 8px 8px;background:#fff;max-height:180px;overflow-y:auto;position:relative;z-index:10;';
+      addressInput.parentNode.appendChild(dropdown);
+      let selectedLocation = {};
+      wireAddressAutocomplete(addressInput, dropdown, loc => {
+        selectedLocation = loc;
+        if (loc.city && fieldRefs['City / Parish']) fieldRefs['City / Parish'].value = loc.city;
+      });
+      fieldRefs.__location = () => Object.keys(selectedLocation).length ? selectedLocation : { address: addressInput.value };
+    }
+
+    // Wire the price step's fake "$142 / night" into a real number input
+    document.querySelectorAll('.pricewrap .pinput').forEach(pinput => {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = '1';
+      input.value = '';
+      input.placeholder = '150';
+      input.style.cssText = 'font-size:inherit;font-weight:inherit;border:none;outline:none;background:none;width:120px;';
+      pinput.textContent = '';
+      pinput.appendChild(input);
+      pinput.append(' / night');
+      fieldRefs.__price = () => parseFloat(input.value) || 0;
+    });
+
+    // Determine which property type card is selected
+    function getSelectedType() {
+      const on = document.querySelector('.typegrid .typeopt.on .tl');
+      return on ? on.textContent.trim().toLowerCase() : 'home';
+    }
+
+    async function publishListing() {
+      const location = fieldRefs.__location ? fieldRefs.__location() :
+        { address: (fieldRefs['Address'] || {}).value || '', city: (fieldRefs['City / Parish'] || {}).value || '' };
+      const body = {
+        title: (fieldRefs['Title'] || {}).value || '',
+        description: (fieldRefs['Description'] || {}).value || '',
+        price: fieldRefs.__price ? fieldRefs.__price() : 0,
+        category: getSelectedType(),
+        location,
+        amenities: [],
+      };
+      try {
+        await JamSpot.apiFetch('/api/profile', { method: 'PUT', body: { role: 'host' } });
+        await JamSpot.apiFetch('/api/listings', { method: 'POST', body });
+      } catch (err) {
+        showToast(err.message || 'Could not publish listing', false);
+      }
+    }
+
+    // The bundle's own #flowNext listener (registered before ours, since the
+    // wizard asset loads earlier in the body) still drives normal step
+    // transitions — we only need to (a) fire the real publish call on the
+    // "Publish" click (transitioning out of the price step), and (b) replace
+    // the final "Go to dashboard" click's stale hard-coded redirect target.
+    const flowNext = document.getElementById('flowNext');
+    if (flowNext) {
+      flowNext.addEventListener('click', async () => {
+        const activeStep = document.querySelector('.flow-step.on');
+        if (activeStep && activeStep.querySelector('.pricewrap')) {
+          const session = await JamSpot.getSession();
+          if (!session.authenticated) { window.location.href = '/auth.html'; return; }
+          await publishListing();
+        }
+      });
+    }
+
+    // Same-element listeners fire in registration order, so we can't
+    // pre-empt the bundle's own click handler on the final step to fix its
+    // stale redirect target — instead, watch for navigation attempts and
+    // correct the path once the flow reaches the publish/congratulations step.
+    const flowBody = document.querySelector('.flow-body');
+    if (flowBody && window.MutationObserver) {
+      const observer = new MutationObserver(() => {
+        const activeStep = document.querySelector('.flow-step.on');
+        if (activeStep && activeStep.classList.contains('publish') && flowNext) {
+          const freshNext = flowNext.cloneNode(true);
+          flowNext.parentNode.replaceChild(freshNext, flowNext);
+          freshNext.addEventListener('click', e => {
+            e.preventDefault();
+            window.location.href = '/host-dashboard.html';
+          });
+          observer.disconnect();
+        }
+      });
+      observer.observe(flowBody, { attributes: true, attributeFilter: ['class'], subtree: true });
+    }
   }
 
   // ─── Experiences ──────────────────────────────────────────────────────────────────────────
